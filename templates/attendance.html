@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Live Attendance</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+
+body{
+    background:#f4f6f9;
+    font-family:Arial;
+}
+
+.camera-card{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0px 5px 15px rgba(0,0,0,0.1);
+}
+
+.attendance-box{
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0px 5px 15px rgba(0,0,0,0.1);
+}
+
+video{
+    width:100%;
+    border-radius:10px;
+}
+
+tr:first-child{
+    background:#e8f5e9;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container mt-4">
+
+<h2 class="text-center mb-3">
+🎥 Live Attendance Monitoring
+</h2>
+
+<div class="camera-card text-center">
+
+<!-- ✅ MOBILE + LAPTOP CAMERA -->
+<video id="video" autoplay playsinline></video>
+
+<br><br>
+
+<button class="btn btn-danger" onclick="stopCamera()">
+⛔ Stop Camera
+</button>
+
+<a href="/dashboard" class="btn btn-secondary">
+⬅ Back Dashboard
+</a>
+
+</div>
+
+<hr>
+
+<div class="attendance-box mt-4">
+
+<h4 class="text-center mb-3">
+📋 Attendance Records
+</h4>
+
+<div id="table"></div>
+
+</div>
+
+</div>
+
+
+<!-- Hidden canvas -->
+<canvas id="canvas" style="display:none;"></canvas>
+
+
+<script>
+
+/* ================= OPEN CAMERA ================= */
+
+let stream;
+
+navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:"environment" }
+})
+.then(function(s){
+    stream = s;
+    document.getElementById("video").srcObject = stream;
+})
+.catch(()=>{
+    alert("Camera Permission Required");
+});
+
+
+/* ================= STOP CAMERA ================= */
+
+function stopCamera(){
+    stream.getTracks().forEach(track => track.stop());
+}
+
+
+/* ================= SEND FRAME TO SERVER ================= */
+
+setInterval(()=>{
+
+    let video=document.getElementById("video");
+    let canvas=document.getElementById("canvas");
+
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+
+    let ctx=canvas.getContext("2d");
+    ctx.drawImage(video,0,0);
+
+    let image=canvas.toDataURL("image/jpeg");
+
+    fetch("/process_frame",{
+        method:"POST",
+        body:image
+    });
+
+},2000);
+
+
+/* ================= LIVE ATTENDANCE TABLE ================= */
+
+setInterval(function(){
+
+fetch("/attendance_data")
+.then(response=>response.text())
+.then(data=>{
+document.getElementById("table").innerHTML=data;
+});
+
+},2000);
+
+</script>
+
+</body>
+</html>
