@@ -9,7 +9,12 @@ import numpy as np
 from firebase_config import attendance_ref
 
 # ✅ Face processing
-from face_module import process_web_frame
+from face_module import (
+    process_web_frame,
+    last_detected_name,
+    last_face_box,
+    reset_memory
+)
 
 app = Flask(__name__)
 app.secret_key = "secretkey"
@@ -116,42 +121,96 @@ def students():
 @app.route('/delete_student/<filename>')
 def delete_student(filename):
 
-    filepath = f"images/{filename}"
+    filepath = os.path.join("images", filename)
 
+    if "_" not in filename:
+        return redirect('/students')
+
+    sid, name = filename.replace(".jpg","").split("_")
+
+    # ===== DELETE IMAGE =====
     if os.path.exists(filepath):
         os.remove(filepath)
+
+    # ===== DELETE CSV RECORD =====
+    if os.path.exists("attendance.csv"):
+
+        import pandas as pd
+
+        df = pd.read_csv("attendance.csv")
+
+        df = df[df["ID"] != sid]
+
+        df.to_csv("attendance.csv", index=False)
+
+    # ===== DELETE FIREBASE RECORD =====
+    from firebase_config import attendance_ref
+
+    data = attendance_ref.get()
+
+    if data:
+        for key, value in data.items():
+            if value.get("id") == sid:
+                attendance_ref.child(key).delete()
 
     return redirect('/students')
 
 
-# ================= EDIT =================
-@app.route('/edit_student/<filename>', methods=['GET', 'POST'])
+# ================= EDIT STUDENT =================
+@app.route('/edit_student/<filename>', methods=['GET','POST'])
 def edit_student(filename):
 
     old_path = os.path.join("images", filename)
-    sid, name = filename.replace(".jpg", "").split("_")
+
+    if "_" not in filename:
+        return redirect('/students')
+
+    old_sid, old_name = filename.replace(".jpg","").split("_")
 
     if request.method == "POST":
 
-        new_sid = request.form['sid']
-        new_name = request.form['name']
+        new_sid = request.form['sid'].strip()
+        new_name = request.form['name'].strip()
 
         new_filename = f"{new_sid}_{new_name}.jpg"
         new_path = os.path.join("images", new_filename)
 
+        # ========= RENAME IMAGE =========
         if os.path.exists(old_path):
             os.rename(old_path, new_path)
+
+        # ========= UPDATE CSV =========
+        if os.path.exists("attendance.csv"):
+
+            df = pd.read_csv("attendance.csv")
+
+            df.loc[df["ID"].astype(str) == old_sid, "ID"] = new_sid
+            df.loc[df["Name"].str.upper() == old_name.upper(),
+                   "Name"] = new_name.upper()
+
+            df.to_csv("attendance.csv", index=False)
+
+        # ========= UPDATE FIREBASE =========
+        data = attendance_ref.get()
+
+        if data:
+            for key, value in data.items():
+
+                if value.get("id") == old_sid:
+
+                    attendance_ref.child(key).update({
+                        "id": new_sid,
+                        "name": new_name.upper()
+                    })
 
         return redirect('/students')
 
     return render_template(
         "edit_student.html",
-        sid=sid,
-        name=name,
+        sid=old_sid,
+        name=old_name,
         filename=filename
     )
-
-
 # ================= SHOW IMAGE =================
 @app.route('/images/<filename>')
 def images(filename):
@@ -212,7 +271,16 @@ def attendance_data():
 
     except Exception:
         return "<h5 class='text-center'>Loading Attendance...</h5>"
+# ================= LIVE FACE BOX =================
+@app.route("/live_face")
+def live_face():
 
+    from face_module import last_detected_name, last_face_box
+
+    return {
+        "name": last_detected_name,
+        "box": last_face_box
+    }
 
 # ================= DOWNLOAD EXCEL =================
 @app.route('/download')
@@ -235,6 +303,26 @@ def download():
 
     except Exception:
         return "Download Error"
+ # ================= RESET ATTENDANCE =================
+@app.route('/reset_attendance')
+def reset_attendance():
+
+    if 'admin' not in session:
+        return redirect('/')
+
+    # ===== DELETE CSV FILE =====
+    if os.path.exists("attendance.csv"):
+        os.remove("attendance.csv")
+
+    # ===== DELETE FIREBASE DATA =====
+    data = attendance_ref.get()
+
+    if data:
+        for key in data.keys():
+            attendance_ref.child(key).delete()
+
+    return redirect('/attendance')
+
 
 
 # ================= RUN =================

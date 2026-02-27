@@ -27,9 +27,19 @@ body{
     box-shadow:0px 5px 15px rgba(0,0,0,0.1);
 }
 
+.video-wrapper{
+    position:relative;
+}
+
 video{
     width:100%;
     border-radius:10px;
+}
+
+canvas{
+    position:absolute;
+    top:0;
+    left:0;
 }
 
 tr:first-child{
@@ -50,10 +60,19 @@ tr:first-child{
 
 <div class="camera-card text-center">
 
-<!-- ✅ MOBILE + LAPTOP CAMERA -->
-<video id="video" autoplay playsinline></video>
+<!-- ✅ LIVE NAME -->
+<h4 id="studentName" class="text-success">
+Scanning...
+</h4>
 
-<br><br>
+<div class="video-wrapper">
+
+<video id="video" autoplay playsinline></video>
+<canvas id="overlay"></canvas>
+
+</div>
+
+<br>
 
 <button class="btn btn-danger" onclick="stopCamera()">
 ⛔ Stop Camera
@@ -67,11 +86,19 @@ tr:first-child{
 
 <hr>
 
-<div class="attendance-box mt-4">
+<div class="attendance-box">
 
 <h4 class="text-center mb-3">
 📋 Attendance Records
 </h4>
+
+<div class="text-center mb-3">
+<a href="/reset_attendance"
+class="btn btn-danger"
+onclick="return confirm('Delete ALL attendance data?')">
+🗑 Reset Attendance
+</a>
+</div>
 
 <div id="table"></div>
 
@@ -80,64 +107,101 @@ tr:first-child{
 </div>
 
 
-<!-- Hidden canvas -->
-<canvas id="canvas" style="display:none;"></canvas>
+<!-- hidden capture canvas -->
+<canvas id="hiddenCanvas" style="display:none;"></canvas>
 
 
 <script>
 
-/* ================= OPEN CAMERA ================= */
-
 let stream;
+const video=document.getElementById("video");
+const overlay=document.getElementById("overlay");
+const ctx=overlay.getContext("2d");
+
+/* ================= START CAMERA ================= */
 
 navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:"environment" }
+video:{facingMode:"environment"}
 })
-.then(function(s){
-    stream = s;
-    document.getElementById("video").srcObject = stream;
+.then(s=>{
+stream=s;
+video.srcObject=s;
 })
 .catch(()=>{
-    alert("Camera Permission Required");
+alert("Camera Permission Required");
 });
-
 
 /* ================= STOP CAMERA ================= */
 
 function stopCamera(){
-    stream.getTracks().forEach(track => track.stop());
+if(stream){
+stream.getTracks().forEach(track=>track.stop());
+}
 }
 
-
-/* ================= SEND FRAME TO SERVER ================= */
+/* ================= SEND FRAME ================= */
 
 setInterval(()=>{
 
-    let video=document.getElementById("video");
-    let canvas=document.getElementById("canvas");
+if(!stream) return;
 
-    canvas.width=video.videoWidth;
-    canvas.height=video.videoHeight;
+let canvas=document.getElementById("hiddenCanvas");
 
-    let ctx=canvas.getContext("2d");
-    ctx.drawImage(video,0,0);
+canvas.width=video.videoWidth;
+canvas.height=video.videoHeight;
 
-    let image=canvas.toDataURL("image/jpeg");
+canvas.getContext("2d")
+.drawImage(video,0,0);
 
-    fetch("/process_frame",{
-        method:"POST",
-        body:image
-    });
+fetch("/process_frame",{
+method:"POST",
+body:canvas.toDataURL("image/jpeg")
+});
 
-},2000);
+},1500);
 
+
+/* ================= DRAW GREEN BOX ================= */
+
+setInterval(()=>{
+
+fetch("/live_face")
+.then(res=>res.json())
+.then(data=>{
+
+overlay.width = video.videoWidth;
+overlay.height = video.videoHeight;
+
+ctx.clearRect(0,0,overlay.width,overlay.height);
+
+// show name on top dashboard text
+document.getElementById("studentName").innerText = data.name;
+
+if(data.box){
+
+let [left,top,right,bottom] = data.box;
+
+// percentage → pixel conversion
+let x1 = left * overlay.width;
+let y1 = top * overlay.height;
+
+// ✅ name near detected face
+ctx.fillStyle = "lime";
+ctx.font = "22px Arial";
+ctx.fillText(data.name, x1, y1 - 10);
+
+}
+
+});
+
+},800);
 
 /* ================= LIVE ATTENDANCE TABLE ================= */
 
-setInterval(function(){
+setInterval(()=>{
 
 fetch("/attendance_data")
-.then(response=>response.text())
+.then(r=>r.text())
 .then(data=>{
 document.getElementById("table").innerHTML=data;
 });
