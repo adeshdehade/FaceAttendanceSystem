@@ -16,8 +16,16 @@ from face_module import (
     reset_memory
 )
 
+from flask import Flask, render_template, request, redirect, session
+
 app = Flask(__name__)
 app.secret_key = "secretkey"
+
+
+# ✅ Test route (VERY IMPORTANT for Render)
+@app.route("/")
+def home():
+    return "✅ Face Attendance Running Successfully on Render"
 
 
 # ================= ADMIN LOGIN =================
