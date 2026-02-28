@@ -1,17 +1,31 @@
 import firebase_admin
 from firebase_admin import credentials, db
 from datetime import datetime
+import os
+import json
 
-cred = credentials.Certificate("firebase_key.json")
 
-firebase_admin.initialize_app(cred, {
-    "databaseURL":
-    "https://faceattendancesystem-d475a-default-rtdb.asia-southeast1.firebasedatabase.app/"
-})
+# ✅ Load Firebase key from Render Environment Variable
+firebase_key = os.environ.get("FIREBASE_KEY")
 
+if not firebase_key:
+    raise ValueError("FIREBASE_KEY environment variable not found")
+
+# ✅ Convert JSON string to dictionary
+cred = credentials.Certificate(json.loads(firebase_key))
+
+# ✅ Initialize Firebase only once
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        "databaseURL":
+        "https://faceattendancesystem-d475a-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    })
+
+# ✅ Database reference
 attendance_ref = db.reference("attendance")
 
 
+# ✅ Save attendance function
 def save_attendance_firebase(name):
 
     now = datetime.now()
