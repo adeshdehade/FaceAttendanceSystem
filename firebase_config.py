@@ -3,7 +3,8 @@ from firebase_admin import credentials, db
 from datetime import datetime
 import os
 import json
-
+import os
+print("FIREBASE KEY EXISTS:", os.environ.get("FIREBASE_KEY") is not None)
 
 # ✅ Read Firebase key from Render Environment Variable
 firebase_key = os.environ.get("FIREBASE_KEY")
